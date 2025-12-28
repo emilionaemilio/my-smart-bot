@@ -1,21 +1,32 @@
 import os
 import telebot
-from telebot import types
+import requests
+from bs4 import BeautifulSoup
 
 TOKEN = os.getenv('BOT_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    btn1 = types.InlineKeyboardButton("🛒 عروض أمازون", url="https://www.amazon.com")
-    btn2 = types.InlineKeyboardButton("🎁 خصومات Temu", url="https://www.temu.com")
-    markup.add(btn1, btn2)
-    
-    bot.reply_to(message, "أهلاً بك! أنا جاهز لجلب الأسعار لك.", reply_markup=markup)
+def get_amazon_price(url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.5"
+    }
+    try:
+        page = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(page.content, 'html.parser')
+        # محاولة البحث عن رمز السعر في أمازون
+        price = soup.find("span", {"class": "a-offscreen"}).get_text()
+        return price
+    except Exception as e:
+        return None
 
-@bot.message_handler(func=lambda message: True)
-def echo_all(message):
-    bot.reply_to(message, "أرسل لي رابط المنتج وسأفحصه لك.")
+@bot.message_handler(func=lambda message: "amazon" in message.text.lower())
+def handle_amazon(message):
+    bot.reply_to(message, "⏳ لحظة واحدة.. أتفحص السعر الآن في أمازون...")
+    price = get_amazon_price(message.text)
+    if price:
+        bot.reply_to(message, f"💰 السعر الحالي لهذا المنتج هو: {price}")
+    else:
+        bot.reply_to(message, "❌ عذراً، لم أستطع سحب السعر. تأكد أن الرابط صحيح أو حاول لاحقاً.")
 
 bot.polling(none_stop=True)
